@@ -1,0 +1,804 @@
+Objective:
+
+To create a cloudfomation template to create a Notebook instance in Sagemaker which will open our jupiter notebook
+
+
+
+Notes:
+step 1 create a cloudformation template
+step 2 samplee labelling
+step 3  
+amazon sagemaker ----> notebook instance, add the necessary IAM role to the instance
+Step 1: s3 bucket(remeber the bucket region and the lavblling job also needs to be in the same region)
+Step 2: Sagemaker---Under ground truth choose the labelling workflows ---Private tab and create a private team 
+
+cretion of notebook instance
+notebook name 
+notebook instance type to be choosen
+Vol size (according to the sample data)
+IAM role(sagemakerfull access)
+S3 bucket(specific bucket only access)
+
+
+Main Reference:Youtube:
+
+1. Label 3D Point Clouds for Machine Learning Training Data with Amazon SageMaker Ground Truth--https://www.youtube.com/watch?v=dQGJZucBPsg
+
+
+Other Reference:Youtube:
+
+1. This helped me in optimizing the instance like the EBS volume creation.
+  Fully-Managed Notebook Instances with Amazon SageMaker - a Deep Dive----->https://www.youtube.com/watch?v=uQc8Itd4UTs
+2. This both videos also helped me understand that the sagemaker is costly so start with small instance size. 
+  AWS This Week: SageMaker cost drop, CloudFormation Stacksets support macros and transforms---->https://www.youtube.com/watch?v=aen4qHCsR4w
+  AWS This Week: Easier NLP deployment in SageMaker JumpStart & new CloudFormation resource types---->https://www.youtube.com/watch?v=9xHSzWrmFaM
+3. Amazon SageMaker Ground Truth - Creating a labeling job (part2)https://www.youtube.com/watch?v=mVA19zjXKGw 
+4. Get Started with Amazon SageMaker Ground Truth ---->https://youtu.be/_FPI6KjDlCI
+5. Amazon SageMaker Ground Truth: Creating a Labeling Workforce - AWS Training-----> https://www.youtube.com/watch?v=Yk4LLD3hQhM
+6. STEP BY STEP TO MACHINE LEARNING WITH SAGEMAKER (getting started with Amazon Sagemaker)---->https://www.youtube.com/watch?v=_FVYDU9-ftI
+7. Video For Labeling System---->https://www.youtube.com/watch?v=qbVz47wndQE
+8. Get Started with Amazon SageMaker Ground Truth---->https://www.youtube.com/watch?v=_FPI6KjDlCI
+
+Main Reference:Github:
+
+1. Create a 3D Point Cloud Labeling Job with Amazon SageMaker Ground Truth---->https://github.com/aws/amazon-sagemaker-examples/blob/main/ground_truth_labeling_jobs/3d_point_cloud_demo/create-3D-pointcloud-labeling-job.ipynb
+
+
+Other Reference:Github:
+
+1. Collection of tools and code examples to demonstrate best practices in using Amazon EC2 Spot Instances.---->https://github.com/Aswinsnair008/ec2-spot-labs
+2. Example notebook Jupyter notebooks that demonstrate how to build, train, and deploy machine learning models using brain Amazon SageMaker.---->https://github.com/aws/amazon-sagemaker-examples
+3. amazon-sagemaker-studio-image-pipeline/template.yaml----> https://github.com/SofianHamiti/amazon-sagemaker-studio-image-pipeline/blob/main/template.yaml
+4. aws-samples/amazon-sagemaker-groundtruth-and-amazon-comprehend-ner-examples----> https://github.com/aws-samples/amazon-sagemaker-groundtruth-and-amazon-comprehend-ner-examples/blob/main/CloudFormation/template.yaml
+
+
+
+
+Main Reference:Code:
+
+1. CREATE AN AMAZON SAGEMAKER NOTEBOOK INSTANCE---->https://ec2spotworkshops.com/using-sagemaker-managed-spot-training/prerequisites/notebook_instance.html
+2. Direct link---->https://raw.githubusercontent.com/awslabs/ec2-spot-workshops/master/workshops/using-sagemaker-managed-spot-training/sagemaker-workshop.yaml
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: >
+    This template deploys a VPC and a Amazon SageMaker Notebook Instance
+
+Parameters:
+  VpcName:
+    Default: EC2SpotSageMakerWorkshop
+    Type: String
+
+  VpcCIDR:
+    Default: 10.215.0.0/16
+    Type: String
+
+  Subnet1CIDR:
+    Default: 10.215.10.0/24
+    Type: String
+
+  Subnet2CIDR:
+    Default: 10.215.20.0/24
+    Type: String
+
+  DefaultCodeRepository:
+    Default: https://github.com/awslabs/ec2-spot-labs.git
+    Type: String
+
+Resources:
+
+# VPC ----------------------------------------------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      MapPublicIpOnLaunch: true
+      CidrBlock: !Ref Subnet1CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName} (Public)
+
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      MapPublicIpOnLaunch: true
+      CidrBlock: !Ref Subnet2CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName} (Public)
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet1
+
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet2
+
+# END VPC ------------------------------------------------------
+
+# NOTEBOOK -----------------------------------------------------
+  NotebookInstance:
+    Type: AWS::SageMaker::NotebookInstance
+    Properties:
+      InstanceType: "ml.t2.large"
+      RoleArn: !GetAtt ExecutionRole.Arn
+      SubnetId: !Ref Subnet1
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      DefaultCodeRepository: !Ref DefaultCodeRepository
+      VolumeSizeInGB: 20
+  
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Notebook Instance Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - FromPort: '443'
+          IpProtocol: tcp
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
+
+  ExecutionRole: 
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "sagemaker.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - 
+          PolicyName: "s3_access"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - 
+                Effect: "Allow"
+                Action: 
+                  - "s3:PutBucketPolicy"
+                  - "s3:DeleteBucket"
+                Resource: "arn:aws:s3:::sagemaker-*"                
+# END NOTEBOOK -------------------------------------------------
+
+Outputs:
+
+  NotebookInstance:
+    Value: !GetAtt NotebookInstance.NotebookInstanceName
+
+
+Other Reference:Code:
+
+1. How to incorporate S3, EC2, and IAM in a CloudFormation template---->https://www.thorntech.com/s3-ec2-iam-cloudformation/
+
+AWSTemplateFormatVersion: 2010-09-09
+Mappings:
+  RegionMap:
+    ap-northeast-1:
+      AMI: ami-0fb21b4aa14df9644
+    ap-northeast-2:
+      AMI: ami-0e718f7b47589f06e
+    ap-south-1:
+      AMI: ami-01d7fe6516804cdb5
+    ap-southeast-1:
+      AMI: ami-0d460f7fb0868710d
+    ap-southeast-2:
+      AMI: ami-0df3632fb977f5e7b
+    ca-central-1:
+      AMI: ami-0b5dd7d6654a382b4
+    eu-central-1:
+      AMI: ami-01bad9426849b8ec6
+    eu-west-1:
+      AMI: ami-076fc6aa5fb693741
+    eu-west-2:
+      AMI: ami-0dd42e45b40a30061
+    eu-west-3:
+      AMI: ami-0d621caae577e29fe
+    sa-east-1:
+      AMI: ami-0b250fcdcfab95380
+    us-east-1:
+      AMI: ami-0a48d69f040e84045
+    us-east-2:
+      AMI: ami-08e569bcd316a99f5
+    us-west-1:
+      AMI: ami-014f2a4483542e98b
+    us-west-2:
+      AMI: ami-0668a1771d7bab2ca
+    us-gov-west-1:
+      AMI: ami-b05912d1
+    us-gov-east-1:
+      AMI: ami-a328c8d2  
+    ap-east-1:
+      AMI: ami-cacdb6bb
+    me-south-1:
+      AMI: ami-0aa64bbdd268e4322    
+    eu-north-1:
+      AMI: ami-20c64c5e
+Conditions:
+  DefaultBucketIsBlank: !Equals ["", !Ref DefaultBucket]
+Resources:
+  RootInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref S3WritableRole
+  S3WritableRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+  RolePolicies:
+    Type: AWS::IAM::Policy
+    DependsOn:
+      - SFTPGatewayInstance
+    Properties:
+      PolicyName: SFTPGatewayInstancePolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:CreateBucket
+              - s3:ListBucket
+              - s3:ListAllMyBuckets
+              - s3:GetBucketLocation
+            Resource: '*'
+      Roles:
+        - !Ref S3WritableRole
+  IPAddress:
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref SFTPGatewayInstance
+    Type: AWS::EC2::EIP
+  SFTPGatewayInstance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            setup:
+              command: !If [DefaultBucketIsBlank, '/usr/local/bin/sftpgatewaysetup', !Sub '/usr/local/bin/sftpgatewaysetup --bucket ${DefaultBucket}']
+    Properties:
+      IamInstanceProfile: !Ref RootInstanceProfile
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref AWS::Region
+        - AMI
+      InstanceType: !Ref EC2Type
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref DiskVolumeSize
+            VolumeType: gp2
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+        - !Ref SFTPGatewaySG
+      SubnetId: !Ref SubnetID
+      Tags:
+        - Key: Name
+          Value: SFTPGateway Instance
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init --stack ${AWS::StackName} --resource SFTPGatewayInstance --region ${AWS::Region}
+  SFTPGatewayBucket:
+    DeletionPolicy: Retain
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If [DefaultBucketIsBlank, !Sub 'sftpgateway-${SFTPGatewayInstance}', !Ref DefaultBucket]
+    DependsOn:
+      - SFTPGatewayInstance
+  SFTPGatewaySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SFTPGateway Security Group
+      VpcId: !Ref VPCIdName
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref InputCIDR
+Parameters:
+  VPCIdName:
+    Description: SFTP Gateway will launch into this VPC
+    Type: AWS::EC2::VPC::Id
+  EC2Type:
+    Description: SFTP Gateway instance type. You can use a t2.micro for testing, but m4.large is recommended for Production.
+    Type: String
+    Default: t2.medium
+    AllowedValues:
+      - t1.micro
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - m4.16xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.12xlarge
+      - m5.24xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - c5.18xlarge
+      - f1.2xlarge
+      - f1.16xlarge
+      - g2.2xlarge
+      - g2.8xlarge
+      - g3.4xlarge
+      - g3.8xlarge
+      - g3.16xlarge
+      - p2.xlarge
+      - p2.8xlarge
+      - p2.16xlarge
+      - p3.2xlarge
+      - p3.8xlarge
+      - p3.16xlarge
+      - cr1.8xlarge
+      - r3.large
+      - r3.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+      - r4.large
+      - r4.xlarge
+      - r4.2xlarge
+      - r4.4xlarge
+      - r4.8xlarge
+      - r4.16xlarge
+      - x1.16xlarge
+      - x1.32xlarge
+      - x1e.xlarge
+      - x1e.2xlarge
+      - x1e.4xlarge
+      - x1e.8xlarge
+      - x1e.16xlarge
+      - x1e.32xlarge
+      - i2.xlarge
+      - i2.2xlarge
+      - i2.4xlarge
+      - i2.8xlarge
+      - i3.large
+      - i3.xlarge
+      - i3.2xlarge
+      - i3.4xlarge
+      - i3.8xlarge
+      - i3.16xlarge
+      - h1.2xlarge
+      - h1.4xlarge
+      - h1.8xlarge
+      - h1.16xlarge
+      - hi1.4xlarge
+      - hs1.8xlarge
+      - d2.xlarge
+      - d2.2xlarge
+      - d2.4xlarge
+      - d2.8xlarge
+  KeyPair:
+    Description: Make sure you have access to this EC2 key pair. Otherwise, create a new key pair before proceeding.
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Existing EC2 KeyPair.
+  SubnetID:
+    Description: Make sure this subnet belongs to the VPC below.
+    Type: AWS::EC2::Subnet::Id
+  DefaultBucket:
+    Description: Set an S3 bucket (leave blank to accept the default)
+    Type: String
+  DiskVolumeSize:
+    Default: 32
+    Description: Disk volume size in GB. Must be at least 32.
+    ConstraintDescription: Must be a number greater or equal to 32
+    MinValue: 32
+    Type: Number
+  InputCIDR:
+    Description: Public IP address range for SSH and SFTP access. Use 0.0.0.0/0 to allow any IP address. Use a CIDR range to restrict access. To get your local machine's IP, see http://checkip.dyndns.org/. (Remember to append /32 for a single IP e.g. 12.34.56.78/32)
+    Type: String
+Outputs:
+  ElasticIP:
+    Value: !Ref IPAddress
+    Description: Elastic IP address
+
+2. CloudFormation for SageMaker instance ---->https://www.studytrails.com/2021/01/13/cloudformation-for-sagemaker-instance/
+#CloudFormation for S3 bucket-------------------------------------------------------------------------------------------------
+Resources:
+  notebookS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'ac${AWS::AccountId}-sagemaker-bucket'
+#CloudFormation for GitHub Repository--------------------------------------------------------------------------------------
+  defaultRepository:
+    Type: AWS::SageMaker::CodeRepository
+    Properties: 
+      CodeRepositoryName: defaultRepo
+      GitConfig:
+        RepositoryUrl:  https://github.com/MithilShah/aws-examples
+        SecretArn: arn:aws:secretsmanager:us-east-1:xxxxxxxx:secret:github-pXnnSg
+#CloudFormation for Lifecycle Configuration----------------------------------------------------------------------------
+    BasicNotebookInstanceLifecycleConfig:
+    Type: "AWS::SageMaker::NotebookInstanceLifecycleConfig"
+    Properties:
+      NotebookInstanceLifecycleConfigName: stopidle
+      OnStart:
+      - Content:
+          Fn::Base64: |
+            #!/bin/bash
+            
+            set -e
+            
+            # OVERVIEW
+            # This script stops a SageMaker notebook once it's idle for more than 1 hour (default time)
+            # You can change the idle time for stop using the environment variable below.
+            # If you want the notebook the stop only if no browsers are open, remove the --ignore-connections flag
+            #
+            # Note that this script will fail if either condition is not met
+            #   1. Ensure the Notebook Instance has internet connectivity to fetch the example config
+            #   2. Ensure the Notebook Instance execution role permissions to SageMaker:StopNotebookInstance to stop the notebook 
+            #       and SageMaker:DescribeNotebookInstance to describe the notebook.
+            #
+            
+            # PARAMETERS
+            IDLE_TIME=3600
+            
+            echo "Fetching the autostop script"
+            wget https://raw.githubusercontent.com/aws-samples/amazon-sagemaker-notebook-instance-lifecycle-config-samples/master/scripts/auto-stop-idle/autostop.py
+            
+            echo "Starting the SageMaker autostop script in cron"
+            
+            (crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python $PWD/autostop.py --time $IDLE_TIME --ignore-connections") | crontab -
+#CloudFormation for SageMaker Execution Role------------------------------------------------------------------------------------
+      ExecutionRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      RoleName: "sagemaker-notebook-role"
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+        - 
+          Effect: "Allow"
+          Principal: 
+            Service: 
+              - "sagemaker.amazonaws.com"
+          Action: 
+          - "sts:AssumeRole"
+      Path: "/"
+      Policies: 
+        - 
+          PolicyName: "sagemaker-notebook-policy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action: 
+                  - "cloudwatch:PutMetricData"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "logs:CreateLogGroup"
+                  - "logs:DescribeLogStreams"
+                Resource: "*"
+              - Effect: "Allow"
+                Action: 
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:ListBucket"
+                Resource: 
+                - !GetAtt notebookS3Bucket.Arn
+#CloudFormation for SageMaker Notebook-----------------------------------------------------------------
+      sageMakerNotebook:
+    Type: AWS::SageMaker::NotebookInstance
+    Properties: 
+      AdditionalCodeRepositories: 
+      - https://github.com/synthetichealth/synthea.git
+      DefaultCodeRepository: !GetAtt defaultRepository.CodeRepositoryName
+      DirectInternetAccess: Enabled
+      InstanceType: ml.t3.medium
+      NotebookInstanceName: sample-notebook
+      RoleArn: !GetAtt ExecutionRole.Arn
+      VolumeSizeInGB: 10
+      LifecycleConfigName: !GetAtt BasicNotebookInstanceLifecycleConfig.NotebookInstanceLifecycleConfigName
+
+
+Current version code:
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: >
+    This template deploys a VPC, Amazon SageMaker Notebook Instance, S3_Bucket
+
+Parameters:
+  VpcName:
+    Default: SagemakerVPC
+    Type: String
+
+  VpcCIDR:
+    Default: 10.215.0.0/16
+    Type: String
+
+  Subnet1CIDR:
+    Default: 10.215.10.0/24
+    Type: String
+
+  Subnet2CIDR:
+    Default: 10.215.20.0/24
+    Type: String
+
+  DefaultCodeRepository:
+    Default: https://github.com/awslabs/ec2-spot-labs.git
+    Type: String
+
+Resources:
+
+# VPC ----------------------------------------------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      MapPublicIpOnLaunch: true
+      CidrBlock: !Ref Subnet1CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName} (Public)
+
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      MapPublicIpOnLaunch: true
+      CidrBlock: !Ref Subnet2CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${VpcName} (Public)
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet1
+
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet2
+
+# END VPC ------------------------------------------------------
+
+# NOTEBOOK -----------------------------------------------------
+  NotebookInstance:
+    Type: AWS::SageMaker::NotebookInstance
+    Properties:
+      InstanceType: "ml.t2.medium"
+      RoleArn: !GetAtt ExecutionRole.Arn
+      SubnetId: !Ref Subnet1
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      DefaultCodeRepository: !Ref DefaultCodeRepository
+      VolumeSizeInGB: 5
+  ExecutionRole: 
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "sagemaker.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies: 
+        - 
+          PolicyName: "sagemaker-notebook-policy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              # - Effect: "Allow"
+              #   Action: 
+              #     - "cloudwatch:PutMetricData"
+              #     - "logs:CreateLogStream"
+              #     - "logs:PutLogEvents"
+              #     - "logs:CreateLogGroup"
+              #     - "logs:DescribeLogStreams"
+              #   Resource: "*"
+              - Effect: "Allow"
+                Action: 
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:ListBucket"
+                Resource: 
+                - !GetAtt S3bucket.Arn
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Notebook Instance Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - FromPort: '443'
+          IpProtocol: tcp
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
+#END NOTEBOOK ----------------------------------------------------------------------
+
+# S3 BUCKET ------------------------------------------------------------------------
+  S3bucket:
+    Type: 'AWS::S3::Bucket'
+    # DeletionPolicy: Retain
+    Properties:
+      BucketName: sagemaker15154787521
+  # IAMS3bucketpolicy:
+  #   Type: 'AWS::IAM::Policy'
+  #   DependsOn:
+  #     - S3AccessRole
+  #   Properties:
+  #     PolicyName: "s3_access"
+  #     PolicyDocument: 
+  #       Version: "2012-10-17" 
+  #       Statement: 
+  #         - Effect: "Allow"
+  #           Action: 
+  #             - "s3:PutBucketPolicy"
+  #             - "s3:DeleteBucket"
+  #             - "s3:GetObject"
+  #           Resource: "*"       
+  #     Roles:
+  #       - !Ref S3AccessRole
+  # S3AccessRole: 
+  #   Type: AWS::IAM::Role
+  #   Properties: 
+  #     AssumeRolePolicyDocument: 
+  #       Version: "2012-10-17"
+  #       Statement: 
+  #         - 
+  #           Effect: "Allow"
+  #           Principal: 
+  #             Service: 
+  #               - "sagemaker.amazonaws.com"
+  #           Action: 
+  #             - "sts:AssumeRole"
+  #     Path: "/"
+
+  # RootInstanceProfile:
+  #   Type: AWS::IAM::InstanceProfile
+  #   DependsOn:
+  #     - S3AccessRole
+  #   Properties:
+  #     Path: /
+  #     Roles:
+  #       - !Ref S3AccessRole
+          
+# END NOTEBOOK -------------------------------------------------
+
+Outputs:
+
+  NotebookInstance:
+    Value: !GetAtt NotebookInstance.NotebookInstanceName
+  # Sagemakerbucket:
+  #   Value: !Ref Sagemakerbucket
+  #   Description: Bucket name
